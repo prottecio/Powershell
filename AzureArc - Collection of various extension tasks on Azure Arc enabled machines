@@ -1,0 +1,93 @@
+#Install module
+Install-Module -Name Az.ConnectedMachine
+Install-Module -Name Az.Maintenance
+Import-Module Az.Maintenance
+
+#Connecting
+Connect-AzAccount
+
+#List subs
+Get-AzSubscription
+
+#Select the sub you want to with id
+Select-AzSubscription -subscriptionid 'xxxxxxxxxxxxxxxxxxxxx'
+
+#Show subscription-name, connected account, tenand-id
+Get-AzContext
+
+#Show names of extensions on selected Azure-Arc VM
+Get-AzConnectedMachineExtension -ResourceGroupName xx-resource-group-name-xx -MachineName xx-machine-name-xx | fl *name*
+
+#Remove WindowsOsUpdateExtension on selected server if stuck on creating
+Remove-AzConnectedMachineExtension -MachineName xx-machine-name-xx -ResourceGroupName xx-resource-group-name-xx -Name WindowsOsUpdateExtension
+
+#List all maintenanceconfigurations
+Get-AzMaintenanceConfiguration | fl
+
+#List all Azure-Arc enabled servers
+Get-AzConnectedMachine | fl
+
+
+########################Get serverextensions on all arc enabled servers stuck on status "Creating" ---------->
+$servers = Get-AzConnectedMachine 
+
+# Iterate through each server
+foreach ($server in $servers) {
+    $resourceId = $server.Id
+    $serverName = $server.Name 
+    # Get the extensions for the server
+    $extensions = Get-AzConnectedMachineExtension -ResourceGroupName $server.ResourceGroupName -MachineName $serverName | Where-Object {$_.Name -eq "WindowsOsUpdateExtension"}
+
+    #if ($extensions.Name -eq "WindowsOsUpdateExtension"){
+    if ($extensions.ProvisioningState -eq "Creating"){
+    
+    Write-host "Server Name: $serverName" $extensions.Name $extensions.ProvisioningState $extensions.TypeHandlerVersion
+    }
+} 
+
+
+########################Get serverextensions version on all arc enabled servers with AzureMonitorWindowsAgent extension with specific version---------->
+$servers = Get-AzConnectedMachine 
+
+# Iterate through each server
+foreach ($server in $servers) {
+    $resourceId = $server.Id
+    $serverName = $server.Name 
+    # Get the extensions for the server
+    $extensions = Get-AzConnectedMachineExtension -ResourceGroupName $server.ResourceGroupName -MachineName $serverName | Where-Object {$_.Name -eq "AzureMonitorWindowsAgent"}
+
+    if ($extensions.TypeHandlerVersion -eq "1.14.0.0"){
+    
+    Write-host "Server Name: $serverName" $extensions.Name $extensions.ProvisioningState $extensions.TypeHandlerVersion
+    }
+} 
+
+########################Get Azure Arc Agent version ---------->
+Get-AzConnectedMachine | Select Name, Agentversion, Resourcegroupname
+
+
+#################### Upgrade AzureMonitorWindowsAgent on SPECIFIC Azure Arc-enabled server ----------------------->
+$server = "xx-machine-name-xx"
+$resourcegroupname = "xx-resource-group-name-xx"
+$target = @{"Microsoft.Azure.Monitor.AzureMonitorWindowsAgent" = @{"targetVersion"="1.15.0.0"}}
+
+Update-AzConnectedExtension -ResourceGroupName $resourcegroupname -MachineName $server -ExtensionTarget $target
+
+
+
+#################### Upgrade AzureMonitorWindowsAgent on ALL Azure Arc-enabled server ----------------------->
+$servers = Get-AzConnectedMachine
+$target = @{"Microsoft.Azure.Monitor.AzureMonitorWindowsAgent" = @{"targetVersion"="1.16.0.0"}}
+
+foreach ($server in $servers) {
+    $resourceId = $server.Id
+    $serverName = $server.Name 
+    # Get the extensions for the server
+    $extensions = Get-AzConnectedMachineExtension -ResourceGroupName $server.ResourceGroupName -MachineName $serverName | Where-Object {$_.Name -eq "AzureMonitorWindowsAgent"}
+
+    if ($extensions.TypeHandlerVersion -eq "1.15.0.0"){
+    
+    Write-host "Server Name: $serverName" $extensions.Name $extensions.ProvisioningState $extensions.TypeHandlerVersion
+    #Update-AzConnectedExtension -ResourceGroupName $server.ResourceGroupName -MachineName $serverName -ExtensionTarget $target
+    }
+}
